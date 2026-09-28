@@ -1,0 +1,24 @@
+Ran the command npm init -y
+It creates a file named package.json which acts like the blueprint of my project which keeps on track which versions have been installed by me.
+-y answers yes to all the default questions which have been asked if we haven't put -y at the end
+This command not needed to run when we run the app
+
+------------------
+
+npm install express multer sqlite3 better-sqlite3 tesseract.js crypto
+Express is the standard framework that makes building API endpoints simple. Node.js doesn't natively provide the easy way to handle the web server or provide the URL roots
+multer acts as a middleman (middleware) that receives image files sent from your frontend form and saves them to your server's disk (uploads/ folder).
+Instead of installing a massive database engine like PostgreSQL or MySQL on your computer, SQLite runs directly inside your project as a single database file
+tesseract.js: An open-source Optical Character Recognition (OCR) engine.
+crypto: A built-in Node.js module used to calculate a unique digital fingerprint (MD5 hash) of an uploaded image file.
+
+--------------------
+
+why server.js?
+Starts the web server (Listens on port 3000)
+delivers the files inside public to the user
+Provides API EndPoints:
+1. POST/api/verify: Accepts uploaded receipt images and order IDs, passes them to verifier.js and returns verification details.
+2. GET/api/orders: Retrieves pending orders for dropdown selection.
+3. GET/api/submissions: Fetches all processed payment logs for the business admin dashboard
+4. GET/ api/bank-sms: Fetches received bank SMS records so the business owner can see available transaction alerts.
