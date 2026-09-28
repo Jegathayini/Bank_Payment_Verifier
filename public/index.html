@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PayGuard - Business Admin Dashboard</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <h1>PayGuard Verification Dashboard</h1>
+    <p>Automated Bank Payment Verification System</p>
+  </header>
+
+  <main class="container">
+    <!-- Customer Submission Simulator Section -->
+    <section class="card">
+      <h2>Simulate Customer Payment Submission</h2>
+      <form id="paymentForm">
+        <label for="orderSelect">Select Order:</label>
+        <select id="orderSelect" required>
+          <option value="">-- Select Pending Order --</option>
+        </select>
+
+        <label for="paymentSlip">Upload Payment Slip Image:</label>
+        <input type="file" id="paymentSlip" accept="image/*" required>
+
+        <button type="submit" id="submitBtn">Submit & Verify Payment</button>
+      </form>
+
+      <div id="resultBox" class="hidden">
+        <h3>Verification Outcome</h3>
+        <p><strong>Decision:</strong> <span id="decisionBadge"></span></p>
+        <p><strong>Reason:</strong> <span id="decisionReason"></span></p>
+        <p><strong>WhatsApp Customer Reply:</strong></p>
+        <blockquote id="customerMsg"></blockquote>
+      </div>
+    </section>
+
+    <!-- Business Audit Log Section -->
+    <section class="card">
+      <h2>Processed Submissions Audit Log</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Order ID</th>
+            <th>Extracted Ref #</th>
+            <th>Decision</th>
+            <th>Reason</th>
+            <th>Date</th>
+          </tr>
+        </thead>
+        <tbody id="submissionsTable">
+          <tr><td colspan="6">No submissions logged yet.</td></tr>
+        </tbody>
+      </table>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

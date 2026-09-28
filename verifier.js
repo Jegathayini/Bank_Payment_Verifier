@@ -47,7 +47,7 @@ async function verifyPayment(orderId, filePath) {
     };
   }
 
-  // Check low readability
+  // Check low readability (Kept as is)
   if (!ocrText || ocrText.trim().length < 15) {
     return {
       decision: 'NEEDS VERIFICATION',
@@ -58,16 +58,35 @@ async function verifyPayment(orderId, filePath) {
     };
   }
 
-  // Extract amount and reference number
-  const amountMatch = ocrText.match(/(?:Rs\.?|USD|\$)?\s?([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]{2})?)/i);
-  const refMatch = ocrText.match(/(?:Ref|Txn|Reference|ID)[\s#:]*([A-Za-z0-9]+)/i);
+  // --- 4. IMPROVED EXTRACTION LOGIC ---
 
-  const extractedAmount = amountMatch ? parseFloat(amountMatch[1].replace(/,/g, '')) : null;
-  const extractedRefNo = refMatch ? refMatch[1] : null;
+  // Extract Amount: Search explicitly for Grand Total, Total, or decimal monetary values
+  let extractedAmount = null;
+  const totalMatch = ocrText.match(/(?:Grand\s*Total|Total\b)[^\n\r]*?([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]{2})?)/i);
 
-  // 4. Reused Reference Number Check
+  if (totalMatch) {
+    extractedAmount = parseFloat(totalMatch[1].replace(/,/g, ''));
+  } else {
+    // Fallback: collect all currency decimal numbers (e.g., 9968.00) and grab the largest one
+    const decimalMatches = [...ocrText.matchAll(/\b([0-9]{1,3}(?:,[0-9]{3})+\.[0-9]{2}|[0-9]{3,6}\.[0-9]{2})\b/g)];
+    if (decimalMatches.length > 0) {
+      const amounts = decimalMatches.map(m => parseFloat(m[1].replace(/,/g, '')));
+      extractedAmount = Math.max(...amounts);
+    }
+  }
+
+  // Extract Reference / PNR / Transaction ID
+  let extractedRefNo = null;
+  const refMatch = ocrText.match(/(?:PNR|Txn\s*ID|Transaction\s*ID|Reference\s*No|Ref\s*No|Payment\s*ID)[\s#:]*([A-Za-z0-9]{5,12})/i);
+  if (refMatch) {
+    extractedRefNo = refMatch[1];
+  }
+
+  // --- END EXTRACTION LOGIC ---
+
+  // 5. Reused Reference Number Check
   if (extractedRefNo) {
-    const reusedRef = db.prepare('SELECT * FROM submissions WHERE extracted_ref_no = ? AND decision = "APPROVED"').get(extractedRefNo);
+    const reusedRef = db.prepare("SELECT * FROM submissions WHERE extracted_ref_no = ? AND decision = 'APPROVED'").get(extractedRefNo);
     if (reusedRef) {
       return {
         decision: 'REJECTED',
@@ -78,7 +97,7 @@ async function verifyPayment(orderId, filePath) {
     }
   }
 
-  // 5. Amount Validation
+  // 6. Amount Validation
   if (extractedAmount && Math.abs(extractedAmount - order.expected_amount) > 0.01) {
     return {
       decision: 'REJECTED',
@@ -88,7 +107,7 @@ async function verifyPayment(orderId, filePath) {
     };
   }
 
-  // 6. Match Bank SMS
+  // 7. Match Bank SMS
   let bankSmsMatch = null;
   if (extractedRefNo) {
     bankSmsMatch = db.prepare('SELECT * FROM bank_sms WHERE reference_number = ? AND is_matched = 0').get(extractedRefNo);

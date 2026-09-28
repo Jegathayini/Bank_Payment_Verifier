@@ -22,3 +22,19 @@ Provides API EndPoints:
 2. GET/api/orders: Retrieves pending orders for dropdown selection.
 3. GET/api/submissions: Fetches all processed payment logs for the business admin dashboard
 4. GET/ api/bank-sms: Fetches received bank SMS records so the business owner can see available transaction alerts.
+
+--------------------
+
+why verifier.js?
+1. Duplicate detection: Calculates an MD5 hash of the image and check the uniqueness of the image.
+2. OCR extraction using tesseract.js
+3. Amount and Reference verification: Extracts the numbers and heck whether the user have paid the correct amount and cross-checks the reference numbers in receipts.
+4. Resores the friendly relations between incoming Bank sms alerts.
+
+---------------------
+
+why database.js?
+1. It initializes SQLite, a single file database inside our project folder instead of running a heavy external database like MySQL.
+2. Builds the 3 primary data tables. -orders(stores order details)   -bank-sms(stores bank alerts received by the business)   -submissions(stores the uploaded image path,computed image hash, extracted OCR text, parsed amount, decision)
+3. Pre loads the test data. If the database is empty it automatically inserts sample orders and a sample bank SMS notification.
+4. Exports a single shared connection: Both server.js and verifier.js need to read and write data to the database. By exporting db from database.js, all parts of your application share the exact same database connection safely.
