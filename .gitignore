@@ -1,0 +1,68 @@
+# ========================
+# Environment & Secrets
+# ========================
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+secrets.json
+config.local.*
+
+# ========================
+# Dependencies
+# ========================
+node_modules/
+vendor/
+__pycache__/
+*.pyc
+.venv/
+venv/
+env/
+
+# ========================
+# Build / Output
+# ========================
+dist/
+build/
+out/
+*.exe
+*.dll
+*.so
+*.o
+
+# ========================
+# Logs & Temporary
+# ========================
+*.log
+logs/
+tmp/
+temp/
+*.tmp
+*.bak
+*.swp
+
+# ========================
+# OS & Editor files
+# ========================
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.code-workspace
+
+# ========================
+# Testing & Coverage
+# ========================
+coverage/
+.nyc_output/
+htmlcov/
+.pytest_cache/
+.tox/
+
+# ========================
+# Database / Local data
+# ========================
+*.db
+*.sqlite
+*.sqlite3
