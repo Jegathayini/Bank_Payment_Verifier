@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PayGuard - Verification Portal</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body style="background-color: #f8fafc; font-family: sans-serif; margin: 0; padding: 0;">
+
+  <!-- Protected Page Guard Script -->
+  <script>
+    const user = JSON.parse(localStorage.getItem('payguard_user'));
+    const admin = localStorage.getItem('payguard_admin');
+
+    if (!admin && (!user || user.status !== 'APPROVED')) {
+      alert('Access Denied. Please log in with an approved account.');
+      window.location.replace('/login.html');
+    }
+  </script>
+
+  <header style="background: #1e293b; color: white; padding: 1rem 2rem; display: flex; justify-content: space-between; align-items: center;">
+    <h1 style="margin: 0; font-size: 1.5rem;">PayGuard Verification Portal</h1>
+    <div id="userInfo">
+      <span id="userNameDisplay" style="font-weight: bold; margin-right: 15px;"></span>
+      <button onclick="logout()" style="background: #ef4444; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer;">Logout</button>
+    </div>
+  </header>
+
+  <main style="max-width: 600px; margin: 40px auto; padding: 20px;">
+    <div style="background: white; padding: 2rem; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
+      <h3 style="margin-top: 0;">Upload Payment Slip for Verification</h3>
+      
+      <form id="verifyForm">
+        <!-- Dynamic Order ID Dropdown Select -->
+        <div style="margin-bottom: 1rem;">
+          <label for="orderId" style="display: block; margin-bottom: 0.5rem; font-weight: bold;">Select Order ID</label>
+          <select id="orderId" required style="width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; background-color: #fff; box-sizing: border-box; font-size: 0.95rem;">
+            <option value="" disabled selected>Loading orders...</option>
+          </select>
+        </div>
+
+        <div style="margin-bottom: 1.5rem;">
+          <label style="display: block; margin-bottom: 0.5rem; font-weight: bold;">Payment Slip Image</label>
+          <input type="file" id="paymentSlip" accept="image/*" required style="width: 100%;">
+        </div>
+
+        <button type="submit" style="width: 100%; background: #2563eb; color: white; padding: 12px; border: none; border-radius: 6px; font-weight: bold; cursor: pointer;">Verify Payment</button>
+      </form>
+
+      <div id="resultContainer" style="margin-top: 1.5rem; display: none; padding: 1rem; border-radius: 6px;"></div>
+    </div>
+  </main>
+
+  <script src="/app.js"></script>
+  <script>
+    // Set Header Display
+    if (admin) {
+      document.getElementById('userNameDisplay').textContent = 'Administrator';
+    } else if (user) {
+      document.getElementById('userNameDisplay').textContent = `Logged in: ${user.name}`;
+    }
+
+    // Populate Order ID Dropdown Options from DB
+    async function loadOrdersDropdown() {
+      const orderSelect = document.getElementById('orderId');
+      try {
+        const res = await fetch('/api/orders');
+        const orders = await res.json();
+
+        if (!orders || orders.length === 0) {
+          orderSelect.innerHTML = '<option value="" disabled selected>No pending orders available</option>';
+          return;
+        }
+
+        orderSelect.innerHTML = '<option value="" disabled selected>-- Select an Order --</option>' + 
+          orders.map(o => `<option value="${o.order_id}">${o.order_id} - ${o.customer_name} (LKR ${o.amount})</option>`).join('');
+      } catch (err) {
+        orderSelect.innerHTML = '<option value="" disabled selected>Failed to load orders</option>';
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', loadOrdersDropdown);
+
+    function logout() {
+      localStorage.removeItem('payguard_user');
+      localStorage.removeItem('payguard_admin');
+      window.location.replace('/login.html');
+    }
+  </script>
+</body>
+</html>

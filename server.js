@@ -72,7 +72,7 @@ app.post('/api/auth/signup', async (req, res) => {
         return res.status(400).json({ error: 'Your signup request is already pending admin approval.' });
       }
 
-      // Re-signup for rejected accounts: update details & set status to PENDING_APPROVAL
+      // Re-signup for rejected accounts
       db.prepare("UPDATE users SET name = ?, password = ?, status = 'PENDING_APPROVAL' WHERE email = ?")
         .run(name, password, email);
     } else {
@@ -81,7 +81,6 @@ app.post('/api/auth/signup', async (req, res) => {
       stmt.run(name, email, password);
     }
 
-    // Notify Admin about signup attempt
     await sendNotificationEmail(
       ADMIN_EMAIL,
       'New Team Member Signup Request',
@@ -131,13 +130,11 @@ app.post('/api/auth/admin-login', (req, res) => {
 
 // --- ADMIN APPROVAL & USER MANAGEMENT ---
 
-// Get Pending User Signups
 app.get('/api/admin/pending-users', (req, res) => {
   const pending = db.prepare("SELECT id, name, email, status, created_at FROM users WHERE status = 'PENDING_APPROVAL' ORDER BY id DESC").all();
   res.json(pending);
 });
 
-// Approve or Reject User Signup
 app.post('/api/admin/user-action', async (req, res) => {
   const { userId, action } = req.body;
 
@@ -194,6 +191,7 @@ app.post('/api/verify', upload.single('paymentSlip'), async (req, res) => {
     if (!req.file) return res.status(400).json({ error: 'Please upload a payment slip image.' });
 
     const result = await verifyPayment(orderId, req.file.path);
+    
     const stmt = db.prepare(`
       INSERT INTO submissions (
         order_id, image_path, image_hash, extracted_text, 
@@ -201,15 +199,22 @@ app.post('/api/verify', upload.single('paymentSlip'), async (req, res) => {
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
+    // Guarded execution against undefined fields
     stmt.run(
-      orderId, req.file.path, result.imageHash || null, result.extractedText || null,
-      result.extractedAmount || null, result.extractedRefNo || null,
-      result.decision, result.decisionReason, result.customerMessage
+      orderId || null,
+      req.file.path || null,
+      result.imageHash || null,
+      result.extractedText || null,
+      result.extractedAmount || null,
+      result.extractedRefNo || null,
+      result.decision || 'REJECTED',
+      result.decisionReason || 'Verification failed',
+      result.customerMessage || ''
     );
 
     res.json(result);
   } catch (error) {
-    console.error('Verification Error:', error);
+    console.error('Verification Route Error:', error);
     res.status(500).json({ error: 'Internal server error during verification.' });
   }
 });
