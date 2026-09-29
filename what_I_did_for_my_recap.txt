@@ -159,6 +159,18 @@ checks) without opening the website every time.
 
 Run with:  node test_verifier.js
 
+---------------------
+
+why the admin login?
+
+The business owner's pages (payment logs, bank SMS alerts) contain private
+information, so they should not be open to every customer. I added an admin
+login so that only the business owner can open the admin dashboard.
+
+- Customers only see the order dropdown and the upload form.
+- The admin logs in first, and only then can see the submissions
+  (processed payment logs), the bank SMS records and the pending orders.
+
 --------------------------------------------------------------
 STEP 4 - HOW THE WHOLE FLOW WORKS
 --------------------------------------------------------------
@@ -176,7 +188,7 @@ STEP 4 - HOW THE WHOLE FLOW WORKS
      e. checks the reference with the bank SMS records
 7. The result and decision are saved in the submissions table
 8. The result is sent back and shown to the customer
-9. The business owner can see everything using
+9. The business owner logs in as admin and can then see everything using
    GET /api/submissions and GET /api/bank-sms
 
 --------------------------------------------------------------
@@ -234,7 +246,7 @@ FUTURE IMPROVEMENTS
 - Connect real bank SMS / bank API
 - Support more bank receipt formats
 - Improve the image before OCR (grayscale, sharpen)
-- Add admin login
+- Make the admin login stronger (hashed passwords, session timeout)
 - Manual approve / reject option
 - Send email notifications
 - Add .gitignore for payguard.db*, uploads/, node_modules/
