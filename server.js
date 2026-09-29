@@ -8,10 +8,9 @@ const { verifyPayment } = require('./verifier');
 const app = express();
 const PORT = 3000;
 
-const ADMIN_EMAIL = 'admin@payguard.com'; // Change to your active admin email
+const ADMIN_EMAIL = 'admin@payguard.com';
 
 // Nodemailer Transporter Configuration
-// For production/gmail, replace with real credentials or App Password
 const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
@@ -63,7 +62,6 @@ app.post('/api/auth/signup', async (req, res) => {
   }
 
   try {
-    // Check if user already exists
     const existingUser = db.prepare('SELECT * FROM users WHERE email = ?').get(email);
 
     if (existingUser) {
@@ -74,16 +72,16 @@ app.post('/api/auth/signup', async (req, res) => {
         return res.status(400).json({ error: 'Your signup request is already pending admin approval.' });
       }
 
-      // If status is REJECTED, update user details and reset status to PENDING_APPROVAL
+      // Re-signup for rejected accounts: update details & set status to PENDING_APPROVAL
       db.prepare("UPDATE users SET name = ?, password = ?, status = 'PENDING_APPROVAL' WHERE email = ?")
         .run(name, password, email);
     } else {
-      // New registration
+      // New user insertion
       const stmt = db.prepare("INSERT INTO users (name, email, password, role, status) VALUES (?, ?, ?, 'TEAM', 'PENDING_APPROVAL')");
       stmt.run(name, email, password);
     }
 
-    // Notify Admin about new signup attempt
+    // Notify Admin about signup attempt
     await sendNotificationEmail(
       ADMIN_EMAIL,
       'New Team Member Signup Request',
@@ -101,7 +99,7 @@ app.post('/api/auth/signup', async (req, res) => {
   }
 });
 
-// Team Member Login (Checks status = APPROVED)
+// Team Member Login
 app.post('/api/auth/login', (req, res) => {
   const { email, password } = req.body;
   const user = db.prepare('SELECT id, name, email, role, status FROM users WHERE email = ? AND password = ?').get(email, password);
@@ -141,7 +139,7 @@ app.get('/api/admin/pending-users', (req, res) => {
 
 // Approve or Reject User Signup
 app.post('/api/admin/user-action', async (req, res) => {
-  const { userId, action } = req.body; // action: 'APPROVED' or 'REJECTED'
+  const { userId, action } = req.body;
 
   const user = db.prepare('SELECT * FROM users WHERE id = ?').get(userId);
   if (!user) return res.status(404).json({ error: 'User not found' });
@@ -169,7 +167,6 @@ app.post('/api/admin/user-action', async (req, res) => {
 
 // --- CONTACT & FEEDBACK ENDPOINTS ---
 
-// Submit Feedback/Contact Request
 app.post('/api/contact', (req, res) => {
   const { name, email, message } = req.body;
   if (!name || !email || !message) {
@@ -180,7 +177,6 @@ app.post('/api/contact', (req, res) => {
   res.json({ success: true, message: 'Your message has been sent to the admin!' });
 });
 
-// Admin Get Feedback Messages
 app.get('/api/admin/feedback', (req, res) => {
   const messages = db.prepare('SELECT * FROM feedback ORDER BY id DESC').all();
   res.json(messages);
