@@ -1,41 +1,244 @@
-Ran the command npm init -y
-It creates a file named package.json which acts like the blueprint of my project which keeps on track which versions have been installed by me.
--y answers yes to all the default questions which have been asked if we haven't put -y at the end
-This command not needed to run when we run the app
+==============================================================
+ WHAT I DID FOR MY RECAP  -  Bank Payment Verifier (PayGuard)
+==============================================================
+
+PROJECT IDEA
+------------
+A website where a customer picks their order and uploads a screenshot of
+their bank payment receipt. The system reads the receipt automatically and
+tells whether the payment is genuine or not.
+
+It checks:
+1. Is this receipt image already used before? (duplicate)
+2. What text is written on the receipt? (OCR)
+3. Is the amount correct for the order?
+4. Does the reference number match the bank SMS the business received?
+
+--------------------------------------------------------------
+STEP 1 - CREATE THE PROJECT
+--------------------------------------------------------------
+
+Ran the command:  npm init -y
+
+It creates a file named package.json which acts like the blueprint of my
+project which keeps on track which versions have been installed by me.
+
+-y answers yes to all the default questions which would have been asked if
+we hadn't put -y at the end.
+
+This command is not needed to run when we run the app (it is only done
+once at the start, because package.json already exists after that).
 
 ------------------
 
+--------------------------------------------------------------
+STEP 2 - INSTALL THE PACKAGES
+--------------------------------------------------------------
+
+Ran the command:
 npm install express multer sqlite3 better-sqlite3 tesseract.js crypto
-Express is the standard framework that makes building API endpoints simple. Node.js doesn't natively provide the easy way to handle the web server or provide the URL roots
-multer acts as a middleman (middleware) that receives image files sent from your frontend form and saves them to your server's disk (uploads/ folder).
-Instead of installing a massive database engine like PostgreSQL or MySQL on your computer, SQLite runs directly inside your project as a single database file
+
+Express is the standard framework that makes building API endpoints
+simple. Node.js doesn't natively provide an easy way to handle the web
+server or provide the URL routes.
+
+multer acts as a middleman (middleware) that receives image files sent
+from your frontend form and saves them to your server's disk
+(uploads/ folder).
+
+Instead of installing a massive database engine like PostgreSQL or MySQL on
+your computer, SQLite runs directly inside your project as a single
+database file.
+
 tesseract.js: An open-source Optical Character Recognition (OCR) engine.
-crypto: A built-in Node.js module used to calculate a unique digital fingerprint (MD5 hash) of an uploaded image file.
+It reads the text from the receipt image.
+
+crypto: A built-in Node.js module used to calculate a unique digital
+fingerprint (MD5 hash) of an uploaded image file.
+(Note: because it is built in, it does not really need to be installed.)
+
+nodemailer: used to send emails from Node.js (for email notifications).
+
+After installing, the node_modules folder and package-lock.json were
+created automatically.
+- node_modules = the downloaded packages (not uploaded to GitHub)
+- package-lock.json = remembers the exact versions installed
 
 --------------------
 
-why server.js?
-Starts the web server (Listens on port 3000)
-delivers the files inside public to the user
-Provides API EndPoints:
-1. POST/api/verify: Accepts uploaded receipt images and order IDs, passes them to verifier.js and returns verification details.
-2. GET/api/orders: Retrieves pending orders for dropdown selection.
-3. GET/api/submissions: Fetches all processed payment logs for the business admin dashboard
-4. GET/ api/bank-sms: Fetches received bank SMS records so the business owner can see available transaction alerts.
+--------------------------------------------------------------
+STEP 3 - PLAN THE FILES
+--------------------------------------------------------------
+
+I split the project into small files so that each file has one job:
+
+database.js       -> the database
+verifier.js       -> the checking logic
+server.js         -> the web server and API
+public/           -> the pages the user sees
+test_verifier.js  -> to test the logic without the website
 
 --------------------
 
-why verifier.js?
-1. Duplicate detection: Calculates an MD5 hash of the image and check the uniqueness of the image.
-2. OCR extraction using tesseract.js
-3. Amount and Reference verification: Extracts the numbers and heck whether the user have paid the correct amount and cross-checks the reference numbers in receipts.
-4. Resores the friendly relations between incoming Bank sms alerts.
+why database.js?
+
+1. It initializes SQLite, a single file database inside our project
+   folder instead of running a heavy external database like MySQL.
+
+2. Builds the 3 primary data tables:
+   - orders (stores order details)
+   - bank_sms (stores bank alerts received by the business)
+   - submissions (stores the uploaded image path, computed image hash,
+     extracted OCR text, parsed amount, decision)
+
+3. Pre loads the test data. If the database is empty it automatically
+   inserts sample orders and a sample bank SMS notification.
+
+4. Exports a single shared connection: Both server.js and verifier.js
+   need to read and write data to the database. By exporting db from
+   database.js, all parts of your application share the exact same
+   database connection safely.
+
+The database file is called payguard.db. The extra files payguard.db-shm
+and payguard.db-wal are temporary helper files that SQLite creates while
+the database is running (they are not source code).
 
 ---------------------
 
-why database.js?
-1. It initializes SQLite, a single file database inside our project folder instead of running a heavy external database like MySQL.
-2. Builds the 3 primary data tables. -orders(stores order details)   -bank-sms(stores bank alerts received by the business)   -submissions(stores the uploaded image path,computed image hash, extracted OCR text, parsed amount, decision)
-3. Pre loads the test data. If the database is empty it automatically inserts sample orders and a sample bank SMS notification.
-4. Exports a single shared connection: Both server.js and verifier.js need to read and write data to the database. By exporting db from database.js, all parts of your application share the exact same database connection safely.
+why verifier.js?
 
+1. Duplicate detection: Calculates an MD5 hash of the image and checks the
+   uniqueness of the image. Same image = same hash, so a reused receipt
+   is caught.
+
+2. OCR extraction using tesseract.js: converts the receipt picture into
+   text.
+
+3. Amount and Reference verification: Extracts the numbers and checks
+   whether the user has paid the correct amount and cross-checks the
+   reference numbers in receipts.
+
+4. Restores/links the relations between the receipt and the incoming bank
+   SMS alerts.
+
+---------------------
+
+why server.js?
+
+Starts the web server (Listens on port 3000)
+
+Delivers the files inside public to the user
+
+Provides API EndPoints:
+
+1. POST /api/verify: Accepts uploaded receipt images and order IDs,
+   passes them to verifier.js and returns verification details.
+
+2. GET /api/orders: Retrieves pending orders for dropdown selection.
+
+3. GET /api/submissions: Fetches all processed payment logs for the
+   business admin dashboard.
+
+4. GET /api/bank-sms: Fetches received bank SMS records so the business
+   owner can see available transaction alerts.
+
+---------------------
+
+why the public folder?
+
+It contains the frontend (HTML, CSS, JavaScript) - the page where the
+customer chooses the order, uploads the receipt and sees the result.
+server.js sends these files to the browser.
+
+---------------------
+
+why test_verifier.js?
+
+To test the verifier logic on its own (hashing, OCR, amount and reference
+checks) without opening the website every time.
+
+Run with:  node test_verifier.js
+
+--------------------------------------------------------------
+STEP 4 - HOW THE WHOLE FLOW WORKS
+--------------------------------------------------------------
+
+1. Customer opens http://localhost:3000
+2. The page loads the pending orders   (GET /api/orders)
+3. Customer selects an order and uploads the receipt image
+4. Browser sends the image and order ID   (POST /api/verify)
+5. multer saves the image in the uploads/ folder
+6. verifier.js:
+     a. makes the MD5 hash and checks for a duplicate
+     b. runs OCR to read the text
+     c. finds the amount and the reference number
+     d. compares the amount with the order
+     e. checks the reference with the bank SMS records
+7. The result and decision are saved in the submissions table
+8. The result is sent back and shown to the customer
+9. The business owner can see everything using
+   GET /api/submissions and GET /api/bank-sms
+
+--------------------------------------------------------------
+STEP 5 - HOW TO RUN MY PROJECT
+--------------------------------------------------------------
+
+1. Clone the project:
+   git clone https://github.com/Jegathayini/Bank_Payment_Verifier.git
+   cd Bank_Payment_Verifier
+
+2. Install everything (do NOT run npm init again):
+   npm install
+
+3. Start the server:
+   node server.js
+
+4. Open the browser:
+   http://localhost:3000
+
+On the first run the database and tables are created automatically and the
+sample orders and sample bank SMS are inserted.
+
+To reset the data: stop the server, delete payguard.db, payguard.db-shm
+and payguard.db-wal, and run the server again.
+
+--------------------------------------------------------------
+THINGS I LEARNED
+--------------------------------------------------------------
+
+- What package.json is and why npm init -y is needed only once.
+- Difference between installing a package and using a built-in module
+  (crypto is built in).
+- How Express creates API endpoints (GET and POST).
+- How multer handles file uploads.
+- How a hash (MD5) can be used as a fingerprint to detect duplicates.
+- How OCR (tesseract.js) turns an image into text.
+- Why SQLite is easy for small projects (one file, no separate server).
+- Why one shared database connection (db) is exported and reused.
+- How to split a project into files with one job each.
+
+--------------------------------------------------------------
+KNOWN LIMITATIONS
+--------------------------------------------------------------
+
+- OCR can misread blurry or low quality images.
+- Different banks have different receipt layouts.
+- Bank SMS data is sample/local data, not live from a bank.
+- A fake or edited screenshot could still fool OCR, so real bank
+  confirmation is still needed for big payments.
+
+--------------------------------------------------------------
+FUTURE IMPROVEMENTS
+--------------------------------------------------------------
+
+- Connect real bank SMS / bank API
+- Support more bank receipt formats
+- Improve the image before OCR (grayscale, sharpen)
+- Add admin login
+- Manual approve / reject option
+- Send email notifications
+- Add .gitignore for payguard.db*, uploads/, node_modules/
+
+--------------------------------------------------------------
+END OF NOTES
+--------------------------------------------------------------
