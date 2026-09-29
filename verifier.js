@@ -47,7 +47,7 @@ async function verifyPayment(orderId, filePath) {
     };
   }
 
-  // Check low readability (Kept as is)
+  // Check low readability
   if (!ocrText || ocrText.trim().length < 15) {
     return {
       decision: 'NEEDS VERIFICATION',
@@ -58,26 +58,37 @@ async function verifyPayment(orderId, filePath) {
     };
   }
 
-  // --- 4. IMPROVED EXTRACTION LOGIC ---
+  // --- 4. COMBINED & ROBUST EXTRACTION LOGIC ---
 
-  // Extract Amount: Search explicitly for Grand Total, Total, or decimal monetary values
+  // Clean OCR text: remove text inside parentheses & strip out barcodes (8+ consecutive digits)
+  const cleanedText = ocrText
+    .replace(/\([^\)]*\)/g, '')   // Strips "(2 items)"
+    .replace(/\b\d{8,}\b/g, '');  // Strips barcode strings like "092320251001"
+
   let extractedAmount = null;
-  const totalMatch = ocrText.match(/(?:Grand\s*Total|Total\b)[^\n\r]*?([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]{2})?)/i);
+
+  // Pattern 1: Look for explicit Total lines (handles decimals, currency symbols, commas, integers)
+  const totalMatch = cleanedText.match(/(?:Total\s*paid|Grand\s*Total|Total|Amount\s*Paid|Amount)\s*[:\-]?\s*(?:₹|Rs\.?|INR|\$)?\s*([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]{2})?|[0-9]{1,6}(?:\.[0-9]{2})?)/i);
 
   if (totalMatch) {
     extractedAmount = parseFloat(totalMatch[1].replace(/,/g, ''));
   } else {
-    // Fallback: collect all currency decimal numbers (e.g., 9968.00) and grab the largest one
-    const decimalMatches = [...ocrText.matchAll(/\b([0-9]{1,3}(?:,[0-9]{3})+\.[0-9]{2}|[0-9]{3,6}\.[0-9]{2})\b/g)];
+    // Pattern 2: Fallback — find standard decimal amounts (e.g., 38.50, 393.22, 10500.00)
+    const decimalMatches = [...cleanedText.matchAll(/\b([0-9]{1,3}(?:,[0-9]{3})*\.[0-9]{2}|[0-9]{1,5}\.[0-9]{2})\b/g)];
     if (decimalMatches.length > 0) {
-      const amounts = decimalMatches.map(m => parseFloat(m[1].replace(/,/g, '')));
-      extractedAmount = Math.max(...amounts);
+      const amounts = decimalMatches
+        .map(m => parseFloat(m[1].replace(/,/g, '')))
+        .filter(amt => amt < 100000); // Filter out unrealistic non-monetary IDs
+      
+      if (amounts.length > 0) {
+        extractedAmount = Math.max(...amounts);
+      }
     }
   }
 
   // Extract Reference / PNR / Transaction ID
   let extractedRefNo = null;
-  const refMatch = ocrText.match(/(?:PNR|Txn\s*ID|Transaction\s*ID|Reference\s*No|Ref\s*No|Payment\s*ID)[\s#:]*([A-Za-z0-9]{5,12})/i);
+  const refMatch = ocrText.match(/(?:PNR|Txn\s*ID|Transaction\s*ID|Reference\s*No|Ref\s*No|Payment\s*ID|License)[\s#:]*([A-Za-z0-9\-_]{5,15})/i);
   if (refMatch) {
     extractedRefNo = refMatch[1];
   }
@@ -98,7 +109,18 @@ async function verifyPayment(orderId, filePath) {
   }
 
   // 6. Amount Validation
-  if (extractedAmount && Math.abs(extractedAmount - order.expected_amount) > 0.01) {
+  // 6a. Missing Amount Check: If OCR fails to detect an amount on the slip
+  if (extractedAmount === null) {
+    return {
+      decision: 'NEEDS VERIFICATION',
+      decisionReason: 'Could not detect or parse a clear payment amount from the payment slip.',
+      customerMessage: 'We could not clearly read the payment amount on your slip. Please upload a clearer image.',
+      imageHash, extractedText: ocrText, extractedAmount, extractedRefNo
+    };
+  }
+
+  // 6b. Mismatched Amount Check: If the detected amount does not match the order expected total
+  if (Math.abs(extractedAmount - order.expected_amount) > 0.01) {
     return {
       decision: 'REJECTED',
       decisionReason: `Payment amount mismatch. Order expects ${order.expected_amount}, but slip shows ${extractedAmount}.`,

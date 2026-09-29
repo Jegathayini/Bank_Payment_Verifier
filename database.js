@@ -1,23 +1,45 @@
 const Database = require('better-sqlite3');
 const db = new Database('payguard.db');
 
-// Create tables
+// Enable Foreign Keys
+db.pragma('foreign_keys = ON');
+
+// 1. Users Table (with approval status)
+db.exec(`
+  CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT,
+    email TEXT UNIQUE,
+    password TEXT,
+    role TEXT DEFAULT 'TEAM',
+    status TEXT DEFAULT 'PENDING_APPROVAL',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )
+`);
+
+// 2. Orders Table
 db.exec(`
   CREATE TABLE IF NOT EXISTS orders (
     order_id TEXT PRIMARY KEY,
     customer_name TEXT,
     expected_amount REAL,
     status TEXT DEFAULT 'PENDING'
-  );
+  )
+`);
 
+// 3. Bank SMS Table
+db.exec(`
   CREATE TABLE IF NOT EXISTS bank_sms (
     sms_id INTEGER PRIMARY KEY AUTOINCREMENT,
-    raw_text TEXT,
-    extracted_amount REAL,
-    reference_number TEXT UNIQUE,
-    is_matched INTEGER DEFAULT 0
-  );
+    ref_no TEXT UNIQUE,
+    amount REAL,
+    sender TEXT,
+    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+  )
+`);
 
+// 4. Submissions Table
+db.exec(`
   CREATE TABLE IF NOT EXISTS submissions (
     submission_id INTEGER PRIMARY KEY AUTOINCREMENT,
     order_id TEXT,
@@ -30,18 +52,19 @@ db.exec(`
     decision_reason TEXT,
     customer_message TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  );
+  )
 `);
 
-// Seed initial test data if empty
-const orderCount = db.prepare('SELECT count(*) as count FROM orders').get();
-if (orderCount.count === 0) {
-  const insertOrder = db.prepare('INSERT INTO orders (order_id, customer_name, expected_amount) VALUES (?, ?, ?)');
-  insertOrder.run('ORD-101', 'Alice', 25000.00);
-  insertOrder.run('ORD-102', 'Bob', 1500.00);
-
-  const insertSMS = db.prepare('INSERT INTO bank_sms (raw_text, extracted_amount, reference_number) VALUES (?, ?, ?)');
-  insertSMS.run('Rs. 25,000 credited to A/C XXXX1234. Ref 839201.', 25000.00, '839201');
-}
+// 5. Contact & Feedback Table
+db.exec(`
+  CREATE TABLE IF NOT EXISTS feedback (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT,
+    email TEXT,
+    message TEXT,
+    status TEXT DEFAULT 'PENDING',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )
+`);
 
 module.exports = db;

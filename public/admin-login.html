@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PayGuard - Admin Portal Access</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-900 flex items-center justify-center min-h-screen">
+  <div class="bg-slate-800 border border-slate-700 p-8 rounded-lg shadow-xl w-full max-w-md text-white">
+    <h2 class="text-2xl font-bold mb-1 text-center">Admin Access</h2>
+    <p class="text-xs text-slate-400 text-center mb-6">Restricted administrative access only</p>
+    <form id="adminLoginForm" class="space-y-4">
+      <div>
+        <label class="block text-xs font-semibold uppercase text-slate-300 mb-1">Admin Username</label>
+        <input type="text" id="username" required class="w-full p-2.5 bg-slate-900 border border-slate-700 rounded text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none">
+      </div>
+      <div>
+        <label class="block text-xs font-semibold uppercase text-slate-300 mb-1">Admin Password</label>
+        <input type="password" id="password" required class="w-full p-2.5 bg-slate-900 border border-slate-700 rounded text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none">
+      </div>
+      <button type="submit" class="w-full bg-blue-600 hover:bg-blue-500 text-white py-2.5 rounded font-semibold text-sm transition">Enter Admin Portal</button>
+    </form>
+    <div class="text-center mt-4">
+      <a href="/index.html" class="text-xs text-slate-400 hover:text-white transition">← Return to Main Application</a>
+    </div>
+  </div>
+
+  <script>
+    document.getElementById('adminLoginForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const res = await fetch('/api/auth/admin-login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: document.getElementById('username').value,
+          password: document.getElementById('password').value
+        })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        localStorage.setItem('isAdmin', 'true');
+        window.location.href = '/admin.html';
+      } else {
+        alert(data.error);
+      }
+    });
+  </script>
+</body>
+</html>

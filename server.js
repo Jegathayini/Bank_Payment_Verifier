@@ -1,62 +1,203 @@
 const express = require('express');
 const multer = require('multer');
 const path = require('path');
+const nodemailer = require('nodemailer');
 const db = require('./database');
 const { verifyPayment } = require('./verifier');
 
 const app = express();
 const PORT = 3000;
 
-// Configure file storage using Multer
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, 'uploads/');
-  },
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, uniqueSuffix + path.extname(file.originalname));
+const ADMIN_EMAIL = 'admin@payguard.com'; // Change to your active admin email
+
+// Nodemailer Transporter Configuration
+// For production/gmail, replace with real credentials or App Password
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: process.env.EMAIL_USER || 'your-system-email@gmail.com',
+    pass: process.env.EMAIL_PASS || 'your-app-password'
   }
 });
 
-const upload = multer({ storage });
+// Helper function to safely attempt sending emails
+async function sendNotificationEmail(to, subject, text, html) {
+  try {
+    if (!process.env.EMAIL_USER) {
+      console.log(`\n--- [EMAIL SIMULATION] ---`);
+      console.log(`To: ${to}\nSubject: ${subject}\nBody: ${text}`);
+      console.log(`--------------------------\n`);
+      return;
+    }
+    await transporter.sendMail({
+      from: `"PayGuard Admin" <${process.env.EMAIL_USER}>`,
+      to,
+      subject,
+      text,
+      html
+    });
+  } catch (error) {
+    console.error('Failed to send email notification:', error.message);
+  }
+}
 
 // Middleware
 app.use(express.json());
 app.use(express.static('public'));
 app.use('/uploads', express.static('uploads'));
 
-// Endpoint 1: Fetch Orders for Dropdown
-app.get('/api/orders', (req, res) => {
-  const orders = db.prepare('SELECT * FROM orders').all();
-  res.json(orders);
+// Configure File Storage
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, 'uploads/'),
+  filename: (req, file, cb) => cb(null, Date.now() + '-' + Math.round(Math.random() * 1E9) + path.extname(file.originalname))
+});
+const upload = multer({ storage });
+
+// --- AUTHENTICATION & APPROVAL ROUTES ---
+
+// Team Member Signup (Allows re-signup if previously REJECTED)
+app.post('/api/auth/signup', async (req, res) => {
+  const { name, email, password } = req.body;
+  if (!name || !email || !password) {
+    return res.status(400).json({ error: 'All fields are required.' });
+  }
+
+  try {
+    // Check if user already exists
+    const existingUser = db.prepare('SELECT * FROM users WHERE email = ?').get(email);
+
+    if (existingUser) {
+      if (existingUser.status === 'APPROVED') {
+        return res.status(400).json({ error: 'Email already registered and approved.' });
+      }
+      if (existingUser.status === 'PENDING_APPROVAL') {
+        return res.status(400).json({ error: 'Your signup request is already pending admin approval.' });
+      }
+
+      // If status is REJECTED, update user details and reset status to PENDING_APPROVAL
+      db.prepare("UPDATE users SET name = ?, password = ?, status = 'PENDING_APPROVAL' WHERE email = ?")
+        .run(name, password, email);
+    } else {
+      // New registration
+      const stmt = db.prepare("INSERT INTO users (name, email, password, role, status) VALUES (?, ?, ?, 'TEAM', 'PENDING_APPROVAL')");
+      stmt.run(name, email, password);
+    }
+
+    // Notify Admin about new signup attempt
+    await sendNotificationEmail(
+      ADMIN_EMAIL,
+      'New Team Member Signup Request',
+      `User ${name} (${email}) has requested access to PayGuard. Please review in the Admin Portal.`,
+      `<h3>New Signup Request</h3><p><strong>Name:</strong> ${name}</p><p><strong>Email:</strong> ${email}</p><p>Log into your Admin Portal to approve or reject this user.</p>`
+    );
+
+    res.json({
+      success: true,
+      message: 'Registration submitted! Your account is pending admin approval.'
+    });
+  } catch (err) {
+    console.error('Signup SQL Error:', err.message);
+    res.status(500).json({ error: 'Database error: ' + err.message });
+  }
 });
 
-// Endpoint 2: Fetch Bank SMS Records
-app.get('/api/bank-sms', (req, res) => {
-  const smsList = db.prepare('SELECT * FROM bank_sms ORDER BY sms_id DESC').all();
-  res.json(smsList);
+// Team Member Login (Checks status = APPROVED)
+app.post('/api/auth/login', (req, res) => {
+  const { email, password } = req.body;
+  const user = db.prepare('SELECT id, name, email, role, status FROM users WHERE email = ? AND password = ?').get(email, password);
+
+  if (!user) {
+    return res.status(401).json({ error: 'Invalid email or password.' });
+  }
+
+  if (user.status === 'PENDING_APPROVAL') {
+    return res.status(403).json({ error: 'Your account is pending admin approval. Please check back later.' });
+  }
+
+  if (user.status === 'REJECTED') {
+    return res.status(403).json({ error: 'Your registration request was rejected by admin. Please click "Contact Admin" on the main page to submit a request.' });
+  }
+
+  res.json({ success: true, user });
 });
 
-// Endpoint 3: Fetch Submissions for Admin Dashboard
-app.get('/api/submissions', (req, res) => {
-  const submissions = db.prepare('SELECT * FROM submissions ORDER BY submission_id DESC').all();
-  res.json(submissions);
+// Admin Login
+app.post('/api/auth/admin-login', (req, res) => {
+  const { username, password } = req.body;
+  if (username === 'admin' && password === 'admin123') {
+    res.json({ success: true, role: 'ADMIN' });
+  } else {
+    res.status(401).json({ error: 'Invalid admin credentials.' });
+  }
 });
 
-// Endpoint 4: Verify Submitted Payment Slip
+// --- ADMIN APPROVAL & USER MANAGEMENT ---
+
+// Get Pending User Signups
+app.get('/api/admin/pending-users', (req, res) => {
+  const pending = db.prepare("SELECT id, name, email, status, created_at FROM users WHERE status = 'PENDING_APPROVAL' ORDER BY id DESC").all();
+  res.json(pending);
+});
+
+// Approve or Reject User Signup
+app.post('/api/admin/user-action', async (req, res) => {
+  const { userId, action } = req.body; // action: 'APPROVED' or 'REJECTED'
+
+  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(userId);
+  if (!user) return res.status(404).json({ error: 'User not found' });
+
+  db.prepare('UPDATE users SET status = ? WHERE id = ?').run(action, userId);
+
+  if (action === 'REJECTED') {
+    await sendNotificationEmail(
+      user.email,
+      'PayGuard Account Registration Status',
+      `Hello ${user.name},\n\nYour sign-up request for PayGuard has been rejected. Please contact the administrator via the Contact page if you believe this is an error.\n\nThank you.`,
+      `<h3>Registration Status Update</h3><p>Hello ${user.name},</p><p>Your sign-up request for <strong>PayGuard</strong> has been rejected by the administrator.</p><p>If you believe this is an error, please visit the home page and click <strong>Contact Admin</strong> to submit a request.</p>`
+    );
+  } else if (action === 'APPROVED') {
+    await sendNotificationEmail(
+      user.email,
+      'PayGuard Account Approved!',
+      `Hello ${user.name},\n\nYour account has been approved! You can now log into PayGuard.`,
+      `<h3>Welcome to PayGuard!</h3><p>Hello ${user.name},</p><p>Your account has been approved. You can now access team verification features.</p>`
+    );
+  }
+
+  res.json({ success: true, message: `User ${user.email} marked as ${action}.` });
+});
+
+// --- CONTACT & FEEDBACK ENDPOINTS ---
+
+// Submit Feedback/Contact Request
+app.post('/api/contact', (req, res) => {
+  const { name, email, message } = req.body;
+  if (!name || !email || !message) {
+    return res.status(400).json({ error: 'All fields are required.' });
+  }
+
+  db.prepare('INSERT INTO feedback (name, email, message) VALUES (?, ?, ?)').run(name, email, message);
+  res.json({ success: true, message: 'Your message has been sent to the admin!' });
+});
+
+// Admin Get Feedback Messages
+app.get('/api/admin/feedback', (req, res) => {
+  const messages = db.prepare('SELECT * FROM feedback ORDER BY id DESC').all();
+  res.json(messages);
+});
+
+// --- VERIFICATION & AUDIT ROUTES ---
+
+app.get('/api/orders', (req, res) => res.json(db.prepare('SELECT * FROM orders').all()));
+app.get('/api/bank-sms', (req, res) => res.json(db.prepare('SELECT * FROM bank_sms ORDER BY sms_id DESC').all()));
+app.get('/api/submissions', (req, res) => res.json(db.prepare('SELECT * FROM submissions ORDER BY submission_id DESC').all()));
+
 app.post('/api/verify', upload.single('paymentSlip'), async (req, res) => {
   try {
     const { orderId } = req.body;
-    if (!req.file) {
-      return res.status(400).json({ error: 'Please upload a payment slip image.' });
-    }
+    if (!req.file) return res.status(400).json({ error: 'Please upload a payment slip image.' });
 
-    const filePath = req.file.path;
-
-    // Run core verifier rules
-    const result = await verifyPayment(orderId, filePath);
-
-    // Save submission attempt into audit trail
+    const result = await verifyPayment(orderId, req.file.path);
     const stmt = db.prepare(`
       INSERT INTO submissions (
         order_id, image_path, image_hash, extracted_text, 
@@ -65,15 +206,9 @@ app.post('/api/verify', upload.single('paymentSlip'), async (req, res) => {
     `);
 
     stmt.run(
-      orderId,
-      filePath,
-      result.imageHash || null,
-      result.extractedText || null,
-      result.extractedAmount || null,
-      result.extractedRefNo || null,
-      result.decision,
-      result.decisionReason,
-      result.customerMessage
+      orderId, req.file.path, result.imageHash || null, result.extractedText || null,
+      result.extractedAmount || null, result.extractedRefNo || null,
+      result.decision, result.decisionReason, result.customerMessage
     );
 
     res.json(result);
@@ -85,5 +220,5 @@ app.post('/api/verify', upload.single('paymentSlip'), async (req, res) => {
 
 // Start Server
 app.listen(PORT, () => {
-  console.log(`Server running at http://localhost:${PORT}`);
+  console.log(`PayGuard Server running at http://localhost:${PORT}`);
 });

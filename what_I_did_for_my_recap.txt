@@ -38,3 +38,4 @@ why database.js?
 2. Builds the 3 primary data tables. -orders(stores order details)   -bank-sms(stores bank alerts received by the business)   -submissions(stores the uploaded image path,computed image hash, extracted OCR text, parsed amount, decision)
 3. Pre loads the test data. If the database is empty it automatically inserts sample orders and a sample bank SMS notification.
 4. Exports a single shared connection: Both server.js and verifier.js need to read and write data to the database. By exporting db from database.js, all parts of your application share the exact same database connection safely.
+

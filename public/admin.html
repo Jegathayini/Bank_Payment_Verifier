@@ -1,0 +1,89 @@
+<!-- Pending User Signups Section -->
+<section style="margin-top: 30px; background: white; padding: 20px; border-radius: 8px;">
+  <h2>Pending User Signups</h2>
+  <table border="1" width="100%" cellpadding="8" style="border-collapse: collapse; margin-top: 10px;">
+    <thead>
+      <tr style="background: #f1f5f9;">
+        <th>ID</th>
+        <th>Name</th>
+        <th>Email</th>
+        <th>Requested At</th>
+        <th>Action</th>
+      </tr>
+    </thead>
+    <tbody id="pendingUsersTable"></tbody>
+  </table>
+</section>
+
+<!-- Feedback / Contact Requests Section -->
+<section style="margin-top: 30px; background: white; padding: 20px; border-radius: 8px;">
+  <h2>User Contact & Feedback Requests</h2>
+  <table border="1" width="100%" cellpadding="8" style="border-collapse: collapse; margin-top: 10px;">
+    <thead>
+      <tr style="background: #f1f5f9;">
+        <th>ID</th>
+        <th>Name</th>
+        <th>Email</th>
+        <th>Message</th>
+        <th>Sent At</th>
+      </tr>
+    </thead>
+    <tbody id="feedbackTable"></tbody>
+  </table>
+</section>
+
+<script>
+  async function loadAdminData() {
+    // Load Pending Signups
+    const userRes = await fetch('/api/admin/pending-users');
+    const users = await userRes.json();
+    const userTable = document.getElementById('pendingUsersTable');
+    userTable.innerHTML = users.length ? '' : '<tr><td colspan="5">No pending signups.</td></tr>';
+    
+    users.forEach(u => {
+      userTable.innerHTML += `
+        <tr>
+          <td>${u.id}</td>
+          <td>${u.name}</td>
+          <td>${u.email}</td>
+          <td>${u.created_at}</td>
+          <td>
+            <button onclick="handleUserAction(${u.id}, 'APPROVED')" style="background:green;color:white;padding:4px 8px;">Approve</button>
+            <button onclick="handleUserAction(${u.id}, 'REJECTED')" style="background:red;color:white;padding:4px 8px;">Reject</button>
+          </td>
+        </tr>
+      `;
+    });
+
+    // Load Feedback Messages
+    const feedbackRes = await fetch('/api/admin/feedback');
+    const feedbacks = await feedbackRes.json();
+    const fbTable = document.getElementById('feedbackTable');
+    fbTable.innerHTML = feedbacks.length ? '' : '<tr><td colspan="5">No messages found.</td></tr>';
+
+    feedbacks.forEach(f => {
+      fbTable.innerHTML += `
+        <tr>
+          <td>${f.id}</td>
+          <td>${f.name}</td>
+          <td>${f.email}</td>
+          <td>${f.message}</td>
+          <td>${f.created_at}</td>
+        </tr>
+      `;
+    });
+  }
+
+  async function handleUserAction(userId, action) {
+    const res = await fetch('/api/admin/user-action', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, action })
+    });
+    const data = await res.json();
+    alert(data.message);
+    loadAdminData();
+  }
+
+  loadAdminData();
+</script>
