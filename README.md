@@ -2,6 +2,7 @@
 
 A Node.js web application that automatically verifies customer **bank payment receipts**. A customer uploads a screenshot of their payment receipt and selects their order. The system then reads the receipt with OCR, checks it for duplicates, compares the amount and reference number with the order, and cross-checks them against the bank SMS alerts received by the business.
 
+[![Watch Demo Video](https://img.shields.io/badge/▶️_Watch_Demo-Google_Drive-blue?style=for-the-badge&logo=googledrive&logoColor=white)](https://drive.google.com/file/d/1ewq-EJ4y9ydokKN_QJJII3D_bKeSNDHp/view?usp=drive_link)
 ---
 
 
